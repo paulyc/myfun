@@ -27,6 +27,7 @@ public:
 		return true;
 	}
 	bool commit() {
+		printf("COMMIT\n");
 		return mysql_commit(_conn) == 0;
 	}
 	bool autocommit(bool enable) {
@@ -42,7 +43,7 @@ private:
 	MYSQL *_conn;
 };
 
-void process(int id, MysqlConn conn) {
+void process(int id, MysqlConn *conn) {
 	
 }
 
@@ -50,7 +51,8 @@ void process(int id, MysqlConn conn) {
 void* read_thread1(void*) {
 	MysqlConn *myConn = new MysqlConn("testdb");
 
-	myConn->query("UPDATE queue_tok SET owner_token='abcdefg', update_time=NOW() WHERE tries=0 AND owner_token IS NULL ORDER BY create_time ASC LIMIT 1");
+	myConn->query("UPDATE queue_tok SET owner_token='abcdefg', update_time=NOW() "
+				  "WHERE tries=0 AND owner_token IS NULL ORDER BY create_time ASC LIMIT 1");
 
 	int rowsAffected = myConn->rowsAffected();
 	myConn->commit();
@@ -66,10 +68,14 @@ void* read_thread1(void*) {
 
 void* read_thread2(void* ) {
 	MysqlConn *myConn = new MysqlConn("testdb");
-	myConn->query("SELECT id FROM queue_tok WHERE tries=0 and owner_token IS NULL ORDER BY create_time ASC LIMIT 1");
-	// pull id
+	myConn->query("SELECT id FROM queue_tok WHERE tries=0 and owner_token IS NULL "
+				  "ORDER BY create_time ASC LIMIT 1");
+	// todo: pull proper id
+	int id = 1;
+
 	char buf[1024];
-	sprintf(buf, "UPDATE queue_tok SET owner_token='ghijklmno', update_time=NOW() WHERE id=%d AND owner_token IS NULL", id);
+	sprintf(buf, "UPDATE queue_tok SET owner_token='ghijklmno', update_time=NOW() "
+				 "WHERE id=%d AND owner_token IS NULL", id);
 	myConn->query(buf);
 	int rowsAffected = myConn->rowsAffected();
 	myConn->commit();
@@ -82,9 +88,10 @@ void* read_thread2(void* ) {
 }
 
 void* reap_thread(void*) {
-	MysqlConn conn = new MysqlConn("testdb");
-	while (running) {
-		conn->query("SELECT id, owner_token FROM queue_tok WHERE owner_token IS NOT NULL AND update_time");
+	MysqlConn *conn = new MysqlConn("testdb");
+	while (true) {
+		conn->query("SELECT id, owner_token FROM queue_tok "
+					"WHERE owner_token IS NOT NULL AND update_time");
 	}
 	delete conn;
 }
@@ -94,7 +101,8 @@ void* ins_thread(void*) {
 	MysqlConn *myConn = new MysqlConn("testdb");
 
 	for (int i = 0; i < 10 ; ++i) {
-		myConn->query("INSERT INTO queue_tok(owner_token, create_time, update_time, tries) VALUES (NULL, NOW(), NULL, 0)");
+		myConn->query("INSERT INTO queue_tok(owner_token, create_time, update_time, tries) "
+					  "VALUES (NULL, NOW(), NULL, 0)");
 	}
 	myConn->commit();
 
@@ -121,6 +129,7 @@ void do_fun() {
 	
 	try {
 		drop_create_table(conn);
+		ins_thread(0);
 	} catch (string e) {
 		cerr << "toplevel exception handler caught " << e << endl;
 	}
